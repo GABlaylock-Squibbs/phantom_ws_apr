@@ -297,6 +297,7 @@ subroutine evol(infile,logfile,evfile,dumpfile,flag)
        ! creation of new sink particles
        !
        if (use_apr) then
+          print*, ">>>> ID CLUMP ABOUT TO BE CALLED"
           call identify_clumps(npart,xyzh,vxyzu,poten,apr_level,xyzmh_ptmass,aprmassoftype,ntrack_temp,track_part_temp)
           call create_or_update_apr_clump(npart,xyzh,vxyzu,poten,apr_level,xyzmh_ptmass,aprmassoftype,ntrack_temp,track_part_temp)
        else

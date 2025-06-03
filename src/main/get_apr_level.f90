@@ -228,6 +228,10 @@ subroutine create_or_update_apr_clump(npart,xyzh,vxyzu,poten,apr_level,xyzmh_ptm
       ! create a new particle to track
       ntrack = ntrack + 1
       track_part(ntrack) = ii
+
+
+
+
    endif
  enddo over_mins
 

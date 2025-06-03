@@ -43,6 +43,9 @@ module apr_region
 
  public :: identify_clumps
 
+ ! CLUMP TRACKING
+ integer, public, dimension(50) :: clump_pid
+
 contains
    
 !-----------------------------------------------------------------------
@@ -82,6 +85,7 @@ subroutine set_apr_centre(apr_type,apr_centre,ntrack,track_part)
 
       ! CLUMP TRACKING HERE
       
+
 
    enddo
    !if (ntrack > 0) read*
@@ -146,6 +150,9 @@ subroutine identify_clumps(npart,xyzh,vxyzu,poten,apr_level,xyzmh_ptmass,aprmass
                            ntrack_temp,track_part_temp)
  use part, only:igas,rhoh
  use ptmass, only:rho_crit_cgs
+
+ use units, only:unit_density
+
  integer, intent(in) :: npart
  integer(kind=1), intent(in) :: apr_level(:)
  real, intent(in) :: xyzh(:,:), vxyzu(:,:), aprmassoftype(:,:),xyzmh_ptmass(:,:)
@@ -157,110 +164,148 @@ subroutine identify_clumps(npart,xyzh,vxyzu,poten,apr_level,xyzmh_ptmass,aprmass
  real :: rin, rout, dbin, dx, dy, dz, rad, gradleft, gradright
  real :: minpoten, pmassi, rhoi
 
- ! set up arrays
- nbins = 50
- allocate(counter(nbins),radius(nbins),ave_poten(nbins),&
-    minima(nbins),min_particle(nbins))
 
- ! Currently hardwired but this is problematic
- call find_inner_and_outer_radius(npart,xyzh,rin,rout)
- rin = 2.0
- rout = 30.
- dbin = (rout-rin)/real(nbins-1)
- do ii = 1,nbins
-    radius(ii) = rin + real(ii-1)*dbin
- enddo
 
- ave_poten = 0.
- counter = 0
- ! Create an azimuthally averaged potential energy vs. radius profile
- do ii = 1,npart
-    dx = xyzh(1,ii) - xyzmh_ptmass(1,1)
-    dy = xyzh(2,ii) - xyzmh_ptmass(2,1)
-    dz = xyzh(3,ii) - xyzmh_ptmass(3,1)
-    rad = sqrt(dx**2 + dy**2 + dz**2)
-    pmassi = aprmassoftype(igas,apr_level(ii))
+ ! for clump tracking
+ integer :: tracking_type 
+ real :: exp_min
 
-    ibin = int((rad - radius(1))/dbin + 1)
-    if ((ibin > nbins) .or. (ibin < 1)) cycle
 
-    ave_poten(ibin) = ave_poten(ibin) + poten(ii)/pmassi
-    counter(ibin) = counter(ibin) + 1
- enddo
+ exp_min = 10E-11
+ tracking_type = 2
 
- ! average with the number of particles in the bin
- do ii = 1,nbins
-    if (counter(ii) > 0) then
-       ave_poten(ii) = ave_poten(ii)/counter(ii)
-    else
-       ave_poten(ii) = 0.
-    endif
- enddo
 
- ! Identify what radius the local minima are at
- minima = 0
- nmins = 0
- do ii = 2, nbins-1
-    gradleft = (ave_poten(ii) - ave_poten(ii-1))/(radius(ii) - radius(ii-1))
-    gradright = (ave_poten(ii+1) - ave_poten(ii))/(radius(ii+1) - radius(ii))
-    if (gradleft * gradright < 0.) then
-       nmins = nmins + 1
-       minima(nmins) = ii
-    endif
- enddo
- if (nmins == 0) return
+ select case (tracking_type)
+ case(1)
+   ! set up arrays
+   nbins = 50
+   allocate(counter(nbins),radius(nbins),ave_poten(nbins),&
+      minima(nbins),min_particle(nbins))
 
- ! Identify the particles in these minima that have the lowest potential energy
- ! this is quite inefficient, in future should save these above into the bins so
- ! you just need to cycle through the subset? Don't know if this is faster
- do jj = 1,nmins
-    minpoten = 1.0
-    do ii = 1,npart
-       dx = xyzh(1,ii) - xyzmh_ptmass(1,1)
-       dy = xyzh(2,ii) - xyzmh_ptmass(2,1)
-       dz = xyzh(3,ii) - xyzmh_ptmass(3,1)
-       rad = sqrt(dx**2 + dy**2 + dz**2)
-       pmassi = aprmassoftype(igas,apr_level(ii))
 
-       ibin = int((rad - radius(1))/dbin + 1)
-       if ((ibin == (minima(jj))) .or. &
-        (ibin - 1 == (minima(jj))) .or. &
-        (ibin + 1 == (minima(jj)))) then ! if it is in the minima bin or adjacents
-          if ((poten(ii)/pmassi) < minpoten) then
-             minpoten = poten(ii)/pmassi ! the one in this bin with the lowest minimum potential
-             min_particle(jj) = ii
-          endif
-       endif
-    enddo
- enddo
+   ! Currently hardwired but this is problematic
+   call find_inner_and_outer_radius(npart,xyzh,rin,rout)
+   rin = 2.0
+   rout = 30.
+   dbin = (rout-rin)/real(nbins-1)
+   do ii = 1,nbins
+      radius(ii) = rin + real(ii-1)*dbin
+   enddo
 
- ! Check they are not already within a region of low potential energy
- ! If they are, replace the existing particle as the one to be tracked
- ntrack_temp = 0
- track_part_temp(:) = 0
- over_mins: do jj = 1,nmins
-    ii = min_particle(jj)
-    ! check that the particle at the lowest potential energy has also met the
-    ! density criteria
-    pmassi = aprmassoftype(igas,apr_level(ii))
-    rhoi = rhoh(xyzh(4,ii),pmassi)
-    if (rhoi < rho_crit_cgs) cycle over_mins
+   ave_poten = 0.
+   counter = 0
+   ! Create an azimuthally averaged potential energy vs. radius profile
+   do ii = 1,npart
+      dx = xyzh(1,ii) - xyzmh_ptmass(1,1)
+      dy = xyzh(2,ii) - xyzmh_ptmass(2,1)
+      dz = xyzh(3,ii) - xyzmh_ptmass(3,1)
+      rad = sqrt(dx**2 + dy**2 + dz**2)
+      pmassi = aprmassoftype(igas,apr_level(ii))
 
-    ! check we haven't seen this particle already and that we're not already tracking it
-    do kk = 1,ntrack_temp
-      if (track_part_temp(kk) == ii) cycle over_mins
-    enddo
-    do kk = 1,ntrack
-      if (track_part(kk) == ii) cycle over_mins
-    enddo
+      ibin = int((rad - radius(1))/dbin + 1)
+      if ((ibin > nbins) .or. (ibin < 1)) cycle
 
-    ! otherwise it is a new particle or particle in existing region to track
-    ntrack_temp = ntrack_temp + 1
-    track_part_temp(ntrack_temp) = ii
- enddo over_mins
+      ave_poten(ibin) = ave_poten(ibin) + poten(ii)/pmassi
+      counter(ibin) = counter(ibin) + 1
+   enddo
 
- ! tidy up
- deallocate(counter,ave_poten,radius,minima,min_particle)
+   ! average with the number of particles in the bin
+   do ii = 1,nbins
+      if (counter(ii) > 0) then
+         ave_poten(ii) = ave_poten(ii)/counter(ii)
+      else
+         ave_poten(ii) = 0.
+      endif
+   enddo
+
+   ! Identify what radius the local minima are at
+   minima = 0
+   nmins = 0
+   do ii = 2, nbins-1
+      gradleft = (ave_poten(ii) - ave_poten(ii-1))/(radius(ii) - radius(ii-1))
+      gradright = (ave_poten(ii+1) - ave_poten(ii))/(radius(ii+1) - radius(ii))
+      if (gradleft * gradright < 0.) then
+         nmins = nmins + 1
+         minima(nmins) = ii
+      endif
+   enddo
+   if (nmins == 0) return
+
+   ! Identify the particles in these minima that have the lowest potential energy
+   ! this is quite inefficient, in future should save these above into the bins so
+   ! you just need to cycle through the subset? Don't know if this is faster
+   do jj = 1,nmins
+      minpoten = 1.0
+      do ii = 1,npart
+         dx = xyzh(1,ii) - xyzmh_ptmass(1,1)
+         dy = xyzh(2,ii) - xyzmh_ptmass(2,1)
+         dz = xyzh(3,ii) - xyzmh_ptmass(3,1)
+         rad = sqrt(dx**2 + dy**2 + dz**2)
+         pmassi = aprmassoftype(igas,apr_level(ii))
+
+         ibin = int((rad - radius(1))/dbin + 1)
+         if ((ibin == (minima(jj))) .or. &
+         (ibin - 1 == (minima(jj))) .or. &
+         (ibin + 1 == (minima(jj)))) then ! if it is in the minima bin or adjacents
+            if ((poten(ii)/pmassi) < minpoten) then
+               minpoten = poten(ii)/pmassi ! the one in this bin with the lowest minimum potential
+               min_particle(jj) = ii
+            endif
+         endif
+      enddo
+   enddo
+
+   ! Check they are not already within a region of low potential energy
+   ! If they are, replace the existing particle as the one to be tracked
+   ntrack_temp = 0
+   track_part_temp(:) = 0
+   over_mins: do jj = 1,nmins
+      ii = min_particle(jj)
+      ! check that the particle at the lowest potential energy has also met the
+      ! density criteria
+      pmassi = aprmassoftype(igas,apr_level(ii))
+      rhoi = rhoh(xyzh(4,ii),pmassi)
+      if (rhoi < rho_crit_cgs) cycle over_mins
+
+      ! check we haven't seen this particle already and that we're not already tracking it
+      do kk = 1,ntrack_temp
+         if (track_part_temp(kk) == ii) cycle over_mins
+      enddo
+      do kk = 1,ntrack
+         if (track_part(kk) == ii) cycle over_mins
+      enddo
+
+      ! otherwise it is a new particle or particle in existing region to track
+      ntrack_temp = ntrack_temp + 1
+      track_part_temp(ntrack_temp) = ii
+   enddo over_mins
+
+   ! tidy up
+   deallocate(counter,ave_poten,radius,minima,min_particle)
+
+ case(2)
+   ! clump tracking goes here
+   print*, ">>> STARTING CLUMP TRACK APR"
+   ! interate over all particles (use rhoh() to calc density)
+   do ii = 1, npart
+
+
+      rhoi = rhoh(xyzh(4,ii),aprmassoftype(igas, apr_level(ii)))
+      if ((rhoi *unit_density) > exp_min) then
+
+         clump_pid(1) = ii
+         print*, ">>>>>>>> CLUMP FOUND <<<<<<<<<<<<"
+         print*, "CLUMP ID = ", clump_pid(1)
+         print*, ">>>>>>>> CLUMP FOUND <<<<<<<<<<<<"
+         ntrack = 1
+
+      end if
+         
+         
+   end do
+
+ end select
+
 
 end subroutine identify_clumps
 
