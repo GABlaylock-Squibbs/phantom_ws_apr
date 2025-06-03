@@ -79,6 +79,10 @@ subroutine set_apr_centre(apr_type,apr_centre,ntrack,track_part)
      ! apr_centre(2,ii) = xyzh(2,track_part(ii))
      ! apr_centre(3,ii) = xyzh(3,track_part(ii))
       !if (ii > 10) cycle
+
+      ! CLUMP TRACKING HERE
+      
+
    enddo
    !if (ntrack > 0) read*
    
