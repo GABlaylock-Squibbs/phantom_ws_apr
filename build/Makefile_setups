@@ -925,6 +925,7 @@ ifeq ($(SETUP), sgdisc)
     ANALYSIS = utils_getneighbours.F90 utils_omp.F90 analysis_disc_stresses.f90
 #    ANALYSIS = utils_getneighbours.F90 utils_omp.F90 analysis_getneighbours.f90
     KNOWN_SETUP=yes
+    APR=yes
 endif
 
 ifeq ($(SETUP), dustysgdisc)

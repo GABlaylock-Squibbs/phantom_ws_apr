@@ -43,9 +43,6 @@ module apr_region
 
  public :: identify_clumps
 
- ! CLUMP TRACKING
- integer, public, dimension(50) :: clump_pid
-
 contains
    
 !-----------------------------------------------------------------------
@@ -82,11 +79,6 @@ subroutine set_apr_centre(apr_type,apr_centre,ntrack,track_part)
      ! apr_centre(2,ii) = xyzh(2,track_part(ii))
      ! apr_centre(3,ii) = xyzh(3,track_part(ii))
       !if (ii > 10) cycle
-
-      ! CLUMP TRACKING HERE
-      
-
-
    enddo
    !if (ntrack > 0) read*
    
@@ -150,9 +142,7 @@ subroutine identify_clumps(npart,xyzh,vxyzu,poten,apr_level,xyzmh_ptmass,aprmass
                            ntrack_temp,track_part_temp)
  use part, only:igas,rhoh
  use ptmass, only:rho_crit_cgs
-
  use units, only:unit_density
-
  integer, intent(in) :: npart
  integer(kind=1), intent(in) :: apr_level(:)
  real, intent(in) :: xyzh(:,:), vxyzu(:,:), aprmassoftype(:,:),xyzmh_ptmass(:,:)
@@ -163,25 +153,20 @@ subroutine identify_clumps(npart,xyzh,vxyzu,poten,apr_level,xyzmh_ptmass,aprmass
  real, allocatable :: radius(:), ave_poten(:)
  real :: rin, rout, dbin, dx, dy, dz, rad, gradleft, gradright
  real :: minpoten, pmassi, rhoi
+ integer :: tracking_type
+ real :: rho_crit_clump
 
-
-
- ! for clump tracking
- integer :: tracking_type 
- real :: exp_min
-
-
- exp_min = 10E-11
+ !Temporarily hardcode tracking_type for now. Ugly but we can read from the .in file in the future.
  tracking_type = 2
 
-
+ ! Use a switch statement to handle different tracking types
  select case (tracking_type)
- case(1)
+
+ case(1) ! potential energy minima - more sensible, but slower(?) approach
    ! set up arrays
    nbins = 50
    allocate(counter(nbins),radius(nbins),ave_poten(nbins),&
       minima(nbins),min_particle(nbins))
-
 
    ! Currently hardwired but this is problematic
    call find_inner_and_outer_radius(npart,xyzh,rin,rout)
@@ -283,29 +268,44 @@ subroutine identify_clumps(npart,xyzh,vxyzu,poten,apr_level,xyzmh_ptmass,aprmass
    ! tidy up
    deallocate(counter,ave_poten,radius,minima,min_particle)
 
- case(2)
-   ! clump tracking goes here
-   print*, ">>> STARTING CLUMP TRACK APR"
-   ! interate over all particles (use rhoh() to calc density)
-   do ii = 1, npart
+ case (2) ! tracking via density using a rho_crit like threshold, messy but faster (?) approach.
+   ! For now, hardcode the critical density for finding clumps
+   rho_crit_clump = 1e-10
+   !print*, 'Tracking type 2: finding clumps based on density'
+   !iterate over all particles and find the ones that are above a certain density threshold
+   my_mins: do ii = 1, npart
 
 
-      rhoi = rhoh(xyzh(4,ii),aprmassoftype(igas, apr_level(ii)))
-      if ((rhoi *unit_density) > exp_min) then
+      do kk = 1,ntrack_temp
+         if (track_part_temp(kk) == ii) cycle my_mins
+         ! print*, "Already found ", kk, ii
+      enddo
+      do kk = 1,ntrack
+         ! print*, "Already found ", kk, ii
+         if (track_part(kk) == ii) cycle my_mins
+      enddo
 
-         clump_pid(1) = ii
-         print*, ">>>>>>>> CLUMP FOUND <<<<<<<<<<<<"
-         print*, "CLUMP ID = ", clump_pid(1)
-         print*, ">>>>>>>> CLUMP FOUND <<<<<<<<<<<<"
-         ntrack = 1
-
-      end if
-         
-         
-   end do
+      rhoi = rhoh(xyzh(4,ii),aprmassoftype(igas,apr_level(ii)))
+      ! if the density achieves the threshold
+      if (rhoi*unit_density >= rho_crit_clump) then
+         if (ntrack_temp > 0) then
+            !print*, 'We already have a clump, exiting loop for now'
+            exit ! if we have already found a clump, exit the loop for now.
+                 ! in the future,, we can do the checks for existing clumps
+                 ! by checking if the particle is already in an APR region
+         else
+            ! if this is the first clump, we do not need to check for existing clumps
+            ntrack_temp = ntrack_temp + 1
+            track_part_temp(1) = ii
+            print*, '>>>>>>>>>>>>>>>>>>>> FOUND CLUMP <<<<<<<<<<<<<<<<<<<<'
+            print*, 'Found clump at particle ', ii, ' with density ', rhoi*unit_density, 'assigning APR region'
+            !print*, track_part_temp
+            print*, '>>>>>>>>>>>>>>>>>>>> FOUND CLUMP <<<<<<<<<<<<<<<<<<<<'
+         endif
+      endif
+   enddo my_mins
 
  end select
-
 
 end subroutine identify_clumps
 

@@ -292,18 +292,19 @@ subroutine evol(infile,logfile,evfile,dumpfile,flag)
     nskip = int(ntot)
 #endif
     nptmass_old = nptmass
-    if (gravity .and. icreate_sinks > 0 .and. ipart_rhomax /= 0) then
-       !
-       ! creation of new sink particles
-       !
-       if (use_apr) then
-          print*, ">>>> ID CLUMP ABOUT TO BE CALLED"
-          call identify_clumps(npart,xyzh,vxyzu,poten,apr_level,xyzmh_ptmass,aprmassoftype,ntrack_temp,track_part_temp)
-          call create_or_update_apr_clump(npart,xyzh,vxyzu,poten,apr_level,xyzmh_ptmass,aprmassoftype,ntrack_temp,track_part_temp)
-       else
-          call ptmass_create(nptmass,npart,ipart_rhomax,xyzh,vxyzu,fxyzu,fext,divcurlv,&
-                          poten,massoftype,xyzmh_ptmass,vxyz_ptmass,fxyz_ptmass,fxyz_ptmass_sinksink,linklist_ptmass,dptmass,time)
-       endif
+    if (gravity .and. icreate_sinks > 0) then ! .and. ipart_rhomax /= 0) then
+      !
+      ! creation of new sink particles
+      !
+      if (use_apr) then
+
+         ! print*, ">>>> ID CLUMP ABOUT TO BE CALLED"
+         call identify_clumps(npart,xyzh,vxyzu,poten,apr_level,xyzmh_ptmass,aprmassoftype,ntrack_temp,track_part_temp)
+         call create_or_update_apr_clump(npart,xyzh,vxyzu,poten,apr_level,xyzmh_ptmass,aprmassoftype,ntrack_temp,track_part_temp)
+      else
+         call ptmass_create(nptmass,npart,ipart_rhomax,xyzh,vxyzu,fxyzu,fext,divcurlv,&
+                        poten,massoftype,xyzmh_ptmass,vxyz_ptmass,fxyz_ptmass,fxyz_ptmass_sinksink,linklist_ptmass,dptmass,time)
+      endif
     endif
 
     if (icreate_sinks == 2) then
