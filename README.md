@@ -2,7 +2,7 @@ Phantom
 =======
 
 > The Phantom Smoothed Particle Hydrodynamics code
-
+> This version based on Bec Nealon's
 About
 -----
 
